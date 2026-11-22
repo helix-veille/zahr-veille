@@ -1,0 +1,27 @@
+name: Veille ZAHR
+on:
+  schedule:
+    - cron: '23 5 * * *'   # chaque matin vers 6 h 23, heure de Paris
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/scan.mjs
+        env:
+          GOOGLE_PLACES_KEY: ${{ secrets.GOOGLE_PLACES_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          APP_URL: ${{ vars.APP_URL }}
+      - name: Enregistrer les résultats
+        run: |
+          git config user.name "zahr-veille"
+          git config user.email "actions@users.noreply.github.com"
+          git add data
+          git diff --staged --quiet || git commit -m "Veille du $(date +%F)"
+          git push
