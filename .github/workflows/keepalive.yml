@@ -1,0 +1,16 @@
+name: Garder la veille active
+on:
+  schedule:
+    - cron: '41 3 1 * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +%F > data/keepalive.txt
+          git config user.name "zahr-veille"; git config user.email "actions@users.noreply.github.com"
+          git add data/keepalive.txt; git commit -m "Keepalive" || true; git push
