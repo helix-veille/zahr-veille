@@ -1,13 +1,15 @@
-// ZAHR Veille : balaie les fiches Google du Var, en partant de Puget-Ville, et garde celles sans vrai site.
+// ZAHR Veille : balaie les fiches Google autour de Hyères (zone de Redha) et garde celles sans vrai site.
 // Lancé chaque jour par GitHub Actions. Secrets : GOOGLE_PLACES_KEY, NTFY_TOPIC (facultatif).
 import { readFile, writeFile } from 'node:fs/promises';
 import { score } from './score.mjs';
 
-const HOME = { lat: 43.2896, lng: 6.1361, name: 'Puget-Ville' };
-const RADIUS_KM = 110;
+const HOME = { lat: 43.115, lng: 6.11, name: 'Hyères' };
+const RADIUS_KM = 17;
+// Zone de Redha : Hyères (Giens, Porquerolles), Carqueiranne, Le Pradet, La Crau, La Garde, La Londe-les-Maures.
+const ZONE_CP = ['83400', '83320', '83220', '83260', '83130', '83250'];
 // Le Var uniquement : cadre du département + code postal 83 obligatoire.
 const VAR_BOX = { s: 42.97, n: 43.83, w: 5.65, e: 6.95 };
-const CELL_KM = 12;
+const CELL_KM = 6;
 const MONTHLY_CAP = +(process.env.MONTHLY_CAP || 950);   // reste sous les 1 000 appels gratuits par mois
 const DAILY_CAP = +(process.env.DAILY_CAP || 31);
 const KEY = process.env.GOOGLE_PLACES_KEY;
@@ -55,6 +57,7 @@ export function classify(p) {
   if (p.businessStatus && p.businessStatus !== 'OPERATIONAL') return null;
   if (CHAINS.some(c => name.includes(c))) return null;
   if (!/\b83\d{3}\b/.test(p.formattedAddress || '')) return null; // hors Var
+  if (!ZONE_CP.some(cp => (p.formattedAddress || '').includes(cp))) return null; // hors zone
   const site = p.websiteUri || '';
   if (!site) return 'sans_site';
   let host = ''; try { host = new URL(site).hostname.toLowerCase(); } catch { return 'sans_site'; }
@@ -76,6 +79,7 @@ const load = async (f, d) => { try { return JSON.parse(await readFile(f, 'utf8')
 
 export async function run({ searchFn = search } = {}) {
   const state = await load('data/state.json', null) || { queue: [], usage: {}, emptyCells: [], done: 0 };
+  if (state.home !== HOME.name) { state.queue = []; state.emptyCells = []; state.home = HOME.name; } // zone changée : on repart de zéro
   if (!state.queue.length) state.queue = cells().flatMap(c => CATEGORIES.map(q => ({ c, q })));
   const prospects = await load('data/prospects.json', []);
   const known = new Set(prospects.map(p => p.id));
