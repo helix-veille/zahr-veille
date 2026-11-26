@@ -1,7 +1,5 @@
-name: Contacts ZAHR
+name: Contacts ZAHR (manuel : l'envoi se fait depuis ZAHR Pilote)
 on:
-  schedule:
-    - cron: '0 8 * * 1-5'   # du lundi au vendredi, 9 h heure de Paris (10 h en été)
   workflow_dispatch:
 permissions:
   contents: write
