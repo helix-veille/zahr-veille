@@ -99,8 +99,10 @@ async function fetchText(url) {
     return r.ok ? (await r.text()).slice(0, 800000) : '';
   } catch { return ''; }
 }
-export async function findContacts(p, get = fetchText) {
-  const c = { email: '', emailSource: '', instagram: instagramOf(p.site), mobile: mobileOf(p.phone) };
+export async function findContacts(p, get = fetchText, found = {}) {
+  const f = found[p.id] || {};
+  const c = { email: f.email || '', emailSource: f.emailSource || '', instagram: (f.instagram || '').replace(/^@/, '') || instagramOf(p.site), mobile: mobileOf(f.mobile) || mobileOf(p.phone) };
+  if (c.email) return c;
   const site = p.site || '';
   // Facebook et Instagram demandent une connexion : on ne les lit pas.
   if (site && !/facebook|fb\.com|instagram|google\.|g\.page/i.test(site)) {
@@ -137,6 +139,9 @@ async function sendMail(to, { subject, body }) {
 export async function run({ get = fetchText } = {}) {
   const prospects = await load('data/prospects.json', []);
   const log = await load('data/contacts.json', {});
+  // Contacts trouvés par la chercheuse de contacts (Claude, chaque matin de semaine à 8 h).
+  // Seuls les prospects qu'elle a déjà étudiés sont contactés, pour ne rien envoyer « à l'aveugle ».
+  const found = await load('data/found.json', {});
   const optout = new Set((await load('data/optout.json', [])).map(s => s.toLowerCase()));
   // Clients et prospects déjà en discussion avec Redha : jamais contactés par le robot.
   const exclude = (await load('data/exclude.json', [])).map(norm).filter(Boolean);
@@ -148,13 +153,13 @@ export async function run({ get = fetchText } = {}) {
   const canMail = !!process.env.GMAIL_APP_PASSWORD || DRY;
 
   const todo = prospects
-    .filter(p => !log[p.id] && p.score >= MIN_SCORE && ZONE_CP.some(cp => (p.address || '').includes(cp)) && !done.has(norm(p.name)) && !optout.has(norm(p.name)) && !excluded(p))
+    .filter(p => !log[p.id] && p.score >= MIN_SCORE && ZONE_CP.some(cp => (p.address || '').includes(cp)) && !done.has(norm(p.name)) && !optout.has(norm(p.name)) && !excluded(p) && found[p.id] && !found[p.id].skip)
     .sort((a, b) => b.score - a.score || (b.found || '').localeCompare(a.found || ''));
 
   let mails = 0, notifs = 0; const report = [];
   for (const p of todo) {
     if (mails >= EMAIL_CAP && notifs >= NOTIF_CAP) break;
-    const c = await findContacts(p, get);
+    const c = await findContacts(p, get, found);
     const where = `${p.name} (${city(p.address)})`;
     if (c.email && !optout.has(c.email) && canMail) {
       if (mails >= EMAIL_CAP) continue;
